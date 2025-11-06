@@ -99,10 +99,7 @@ if hookmetamethod then
 end
 
 function syn.checkcaller()
-    if checkcaller then return checkcaller() end
-    if isexecutorclosure then return isexecutorclosure(debug.info(2, 'f')) end
-
-    return false
+    return (checkcaller and checkcaller() or (isexecutorclosure and isexecutorclosure(debug.info(2, 'f')))) or true
 end
 
 local function find_and_nill_registry_value(target: Instance)
@@ -161,7 +158,7 @@ function syn.cache_replace(Cache1: Instance, Cache2: Instance)
 end
 
 function syn.cache_iscached(iscached_Cache: Instance): boolean
-	if cache and cache.iscached then
+	if (cache and cache.iscached) then
 		return cache.iscached(iscached_Cache)
 	end
 
@@ -187,21 +184,26 @@ end
 syn.is_cached = syn.cache_iscached
 
 function syn.request(options: { Url: string, Method: any?, Body: string })
-	local hwid; if gethwid then hwid = gethwid() else hwid = tostring(game:GetService("RbxAnalyticsService"):GetClientId()) end
-	local user = game:GetService("Players").LocalPlayer.Name or game:GetService("Players").LocalPlayer.DisplayName
+	local hwid = (gethwid and gethwid() or game:GetService('RbxAnalyticsService'):GetClientId())
+	local user = game.Players.LocalPlayer.Name;
+
 	if env.request or request then
 		options["Syn-Fingerprint"] = hwid;
 		options["Syn-User-Identifier"] = user;
 
-		local success, result = select(1, pcall(function() options.Header = {["User-Agent"] = "synx v2.1.3b"} end))
-		if not success then return result, nil end
-		return (env.request or request)(options)
+        -- this can fck up your luarmor support so i wouldnt recommend it
+
+        local success, status = pcall(function() options.Header = {["User-Agent"] = "synx v2.1.3b"} end);
+        if not success and status then return status, nil end
+
+		return (request or http_request or (http and http.request))
 	end
 
-	return
+	return {}
 end
 
-if type(crypt) == 'table' or type(env.crypt) == 'table' then syn.crypt = env.crypt or crypt end-- i am not completing the rest.
+local crypt = (crypt or {})
+syn.crypt = crypt
 
 function syn.secure_call(target_func, fake_script, ...)
     assert(getsenv, 'Your executor must support getsenv inorder to use syn.secure_call');
@@ -229,10 +231,7 @@ function syn.create_secure_function(arg) -- at this point bro just newcclosure
 	assert(type(arg) == 'function', 'expected a function, got ' .. type(arg))
 	table.insert(syn, {func = arg})
 
-    if newcclosure then
-        return newcclosure(arg);
-    end
-
+    arg = newcclosure(arg);
     local t = clonefunction(arg);
     if not getfenv(t) == getfenv(arg) then
         setfenv(t, getfenv(arg))
@@ -250,18 +249,11 @@ function syn.is_luau()
 end
 
 syn.set_thread_identity = function(identity: number)
-    if setthreadidentity or setidentity then
-        setidentity(identity)
-        return
-    end
-
-    --getidentity = function() return identity end
-    --useless because it's in this function's environment, not the global environment
+    return (setidentity and setidentity(identity) or (setthreadidentity and setthreadidentity(identity)));
 end
 
 syn._getthreadidentity = function(): number
-    if getidentity then return getidentity() end
-    return 3; -- external
+    return (getidentity and getidentity()) or 3
 end
 
 function syn.toast_notification(T: string, T2: string, image) -- this will not be added.
@@ -283,11 +275,12 @@ end
 
 
 function syn.isreadonly(main: {}): boolean
-    if isreadonly then return isreadonly(tb, option) else return table.isfrozen(main) end
+    return (isreadonly or function(tb: {}) return table.isfrozen(tb) end)
 end
 
+
 function syn.setreadonly(tb: {}, option: boolean)
-    if setreadonly then setreadonly(tb, option) return end
+    return (setreadonly or function() end)
 end
 
 return syn -- i like mine in a cup
