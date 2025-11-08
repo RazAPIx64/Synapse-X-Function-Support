@@ -19,6 +19,8 @@ local function Err() error('Cannot use this method in a secure sandboxed functio
 
 if getidentity then identity = getidentity else identity = nil end
 
+identity = (getidentity and getidentity()) or nil
+
 syn.__index = syn;
 local env = getfenv() or getfenv(0);
 
@@ -52,8 +54,6 @@ function PROTOSMASHER_LOADED() return true end -- or return true;
 is_syn_function = PROTOSMASHER_LOADED
 is_synapse_function = is_syn_function
 syn_isbeta = PROTOSMASHER_LOADED
-
-syn.protect_gui = false;
 
 if hookmetamethod then
     if getnamecallmethod and checkcaller then
@@ -120,65 +120,44 @@ local function find_and_nill_registry_value(target: Instance)
 end
 
 function syn.cache_invalidate(invalidated_Cache: Instance)
-	if cache and cache.invalidate then
-		return cache.invalidate(invalidated_Cache)
-	end
+    (cache and cache.invalidate)(invalidated_Cache)
 
-	find_and_nill_registry_value(invalidated_Cache)
+    if not cache then
+        find_and_nill_registry_value(invalidated_Cache)
 
-	syn.Cached[invalidated_Cache] = nil
-	pcall(function() invalidated_Cache.Parent = nil end)
+        syn.Cached[invalidated_Cache] = nil
+        pcall(function() invalidated_Cache.Parent = nil end)
+    end
 end
 
-function syn.cache_replace(Cache1: Instance, Cache2: Instance)
-	syn.insert(syn.Cached, Cache1, syn.Cached, Cache2)
-
-	if cache and cache.replace then
-		return cache.replace(Cache1, Cache2)
+function syn.cache_replace(a,b)
+	if cache and cache.replace then return cache.replace(a,b) end
+	syn.Cached[a], syn.Cached[b] = nil, syn.Cached[a]
+	local r = (getreg and getreg()) or (env and env.getreg and env.getreg())
+	if not r then
+		local m1 = getmetatable(syn.Cached[a]) or syn.Cached[a]
+		local m2 = getmetatable(syn.Cached[b]) or syn.Cached[b]
+		syn.Cached[m1] = m2
+		return
 	end
-
-	if getreg or (env and env.getreg) then
-		local reg = getreg and getreg() or env.getreg()
-		for i, v in pairs(reg) do
-			if v == Cache1 then
-				reg[i] = Cache2
-			elseif type(v) == "table" then
-				for k, val in pairs(v) do
-					if val == Cache1 then
-						v[k] = Cache2
-					end
-				end
-			end
+	for i,v in pairs(r) do
+		if v == a then r[i] = b
+		elseif type(v) == "table" and table.find(v, a) then
+			for k,val in pairs(v) do if val == a then v[k] = b end end
 		end
-	else
-		local main = getmetatable(syn.Cached[Cache1]) or syn.Cached[Cache1]
-		local main2 = getmetatable(syn.Cached[Cache2]) or syn.Cached[Cache2]
-		syn.Cached[main] = main2
 	end
 end
 
-function syn.cache_iscached(iscached_Cache: Instance): boolean
-	if (cache and cache.iscached) then
-		return cache.iscached(iscached_Cache)
+function syn.cache_iscached(i)
+	if cache and cache.iscached then return cache.iscached(i) end
+	if syn.Cached[i] ~= nil then return true end
+	local r = (getreg and getreg()) or (env and env.getreg and env.getreg())
+	if not r then return false end
+	for _,v in pairs(r) do
+		if v == i then return true
+		elseif type(v) == "table" and table.find(v, i) then return true end
 	end
-
-	if getreg or (env and env.getreg) then
-		local reg = getreg and getreg() or env.getreg()
-		for _, v in pairs(reg) do
-			if v == iscached_Cache then
-				return true
-			elseif type(v) == "table" then
-				for _, val in pairs(v) do
-					if val == iscached_Cache then
-						return true
-					end
-				end
-			end
-		end
-		return false
-	end
-
-	return syn.Cached[iscached_Cache] ~= nil
+	return false
 end
 
 syn.is_cached = syn.cache_iscached
@@ -203,7 +182,8 @@ function syn.request(options: { Url: string, Method: any?, Body: string })
 end
 
 local crypt = (crypt or {})
-syn.crypt = crypt
+syn.crypt = crypt;
+syn.crypto = crypt;
 
 function syn.secure_call(target_func, fake_script, ...)
     assert(getsenv, 'Your executor must support getsenv inorder to use syn.secure_call');
@@ -226,6 +206,19 @@ end
 function syn.run_secure_function(func, ...)
 	task.spawn(func, ...)
 end
+
+syn.run_on_actor = (run_on_actor or function(actor: Instance, source: string, ...)
+    assert(typeof(actor) == 'Instance', 'syn.run_on_actor: expected Instance, got ' .. typeof(actor));
+    assert(actor.ClassName == 'Actor', 'argument #1 is not an Actor');
+
+    assert(actor:FindFirstChildOfClass('LocalScript') or actor:FindFirstChildOfClass('ModuleScript'), 'No script found inside of Actor');
+
+    (loadstring or (function(...) return function(...) end end))(actor:FindFirstChildOfClass('LocalScript').Source)();
+end);
+
+syn.clear_teleport_queue = (clear_teleport_queue or function()
+    (queue_on_teleport or (queueonteleport or (function(s) return s end)))('')
+end)
 
 function syn.create_secure_function(arg) -- at this point bro just newcclosure
 	assert(type(arg) == 'function', 'expected a function, got ' .. type(arg))
@@ -252,7 +245,7 @@ syn.set_thread_identity = function(identity: number)
     return (setidentity and setidentity(identity) or (setthreadidentity and setthreadidentity(identity)));
 end
 
-syn._getthreadidentity = function(): number
+syn.get_thread_identity = function(): number
     return (getidentity and getidentity()) or 3
 end
 
@@ -264,23 +257,25 @@ function syn.toast_notification(T: string, T2: string, image) -- this will not b
     })
 end
 
-	-- function syn.definetly_not_bsod()
-	--     game:GetService("RunService").RenderStepped:Connect(function()
-	--         while task.wait(0.01) do
-	--             buffer.create(0x4000000000)
-	--         end
-	--     end)
-	-- end
-
-
+-- function syn.definetly_not_bsod()
+--     game:GetService("RunService").RenderStepped:Connect(function()
+--         while task.wait(0.01) do
+--             buffer.create(0x4000000000)
+--         end
+--     end)
+-- end
 
 function syn.isreadonly(main: {}): boolean
     return (isreadonly or function(tb: {}) return table.isfrozen(tb) end)
 end
 
-
 function syn.setreadonly(tb: {}, option: boolean)
     return (setreadonly or function() end)
 end
+
+function syn.write_clipboard(content: string)
+    return (setclipboard and setclipboard(content));
+end
+
 
 return syn -- i like mine in a cup
