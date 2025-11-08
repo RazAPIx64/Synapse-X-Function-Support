@@ -12,12 +12,15 @@ local Syn = syn; -- doesnt matter which var you do, just use syn and not Syn
 # REQUIREMENTS:
 
 hookmetamethod (syn.protect_gui, syn.unprotect_gui): if you don't have hookmetamethod then you cannot use this
+
 getnamecallmethod (syn.protect_gui, syn.unprotect_gui)
 
 getthreadidentity/getidentity (syn.get_thread_identity)
+
 setthreadidentity/setidentity (syn.set_thread_identity)
 
 request/gethwid (syn.request)
+
 cache (syn.cache)
 
 clipboard (syn.write_clipboard, etc)
