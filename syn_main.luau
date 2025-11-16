@@ -17,8 +17,6 @@ local Protected = {}
 local identity;
 local function Err() error('Cannot use this method in a secure sandboxed function') end;
 
-if getidentity then identity = getidentity else identity = nil end
-
 identity = (getidentity and getidentity()) or nil
 
 syn.__index = syn;
